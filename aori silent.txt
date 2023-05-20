@@ -1,0 +1,255 @@
+getgenv().Settings = {
+    ["SilentAimKeybind"] = "q"
+}
+getgenv().AorinjectSettings = {
+   SilentAim = true,
+   Prediction = 0.1,
+}
+
+Drawing = Drawing
+mousemoverel = mousemoverel
+
+
+local AorinjectSettings = getgenv().AorinjectSettings
+local Locking = false
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local Mouse = LocalPlayer:GetMouse()
+local Workspace = game:GetService("Workspace")
+local GuiService = game:GetService("GuiService")
+local RunService = game:GetService("RunService")
+local Heartbeat = RunService.Heartbeat
+local CurrentCamera = Workspace.CurrentCamera
+local Drawingnew, Color3fromRGB, Vector2new = Drawing.new
+local Color3fromRGB = Color3.fromRGB
+local Vector2new = Vector2.new
+local GetGuiInset = GuiService.GetGuiInset
+local CharacterAdded = LocalPlayer.CharacterAdded
+local CharacterAddedWait = CharacterAdded.Wait
+local WorldToViewportPoint = CurrentCamera.WorldToViewportPoint
+local RaycastParamsnew = RaycastParams.new
+local EnumRaycastFilterTypeBlacklist = Enum.RaycastFilterType.Blacklist
+local Raycast = Workspace.Raycast
+local GetPlayers = Players.GetPlayers
+local Instancenew = Instance.new
+local IsDescendantOf = Instancenew("Part").IsDescendantOf
+local FindFirstChildWhichIsA = Instancenew("Part").FindFirstChildWhichIsA
+local FindFirstChild = Instancenew("Part").FindFirstChild
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local Camera = game:GetService("Workspace").CurrentCamera
+local lp = game:GetService("Players").LocalPlayer
+local cc = game:GetService("Workspace").CurrentCamera
+local mouse = lp:GetMouse()
+
+getgenv().Aorinject = {
+   Enabled = true,
+   ShowFOV = false,
+   FOV = 26,
+   FOVSides = 300,
+   FOVColour = Color3fromRGB(0, 0, 0),
+   VisibleCheck = true,
+   HitChance = 100,
+   Selected = nil,
+   SelectedPart = nil,
+   TargetPart = {"Head", "HumanoidRootPart"},
+}
+
+
+local circle = Drawingnew("Circle")
+circle.Transparency = 0.4
+circle.Thickness = 0.8
+circle.Color = Aorinject.FOVColour
+circle.Filled = false
+Aorinject.FOVCircle = circle
+
+function Aorinject.UpdateFOV()
+   if not (circle) then
+       return
+   end
+   circle.Visible = Aorinject.ShowFOV
+   circle.Radius = Aorinject.FOV
+   circle.Position = Vector2new(Mouse.X, Mouse.Y + GetGuiInset(GuiService).Y)
+   circle.NumSides = Aorinject.FOVSides
+   circle.Color = Aorinject.FOVColour
+   return circle
+end
+
+function Aorinject.IsPartVisible(Part, PartDescendant)
+   local Character = LocalPlayer.Character or CharacterAddedWait(CharacterAdded)
+   local Origin = CurrentCamera.CFrame.Position
+   local _, OnScreen = WorldToViewportPoint(CurrentCamera, Part.Position)
+   if (OnScreen) then
+       local raycastParams = RaycastParamsnew()
+       raycastParams.FilterType = EnumRaycastFilterTypeBlacklist
+       raycastParams.FilterDescendantsInstances = {Character, CurrentCamera}
+       local Result = Raycast(Workspace, Origin, Part.Position - Origin, raycastParams)
+       if (Result) then
+           local PartHit = Result.Instance
+           local Visible = (not PartHit or IsDescendantOf(PartHit, PartDescendant))
+           return Visible
+       end
+   end
+   return false
+end
+
+function Aorinject.Raycast(Origin, Destination, UnitMultiplier)
+   if (typeof(Origin) == "Vector3" and typeof(Destination) == "Vector3") then
+       if (not UnitMultiplier) then UnitMultiplier = 1 end
+       local Direction = (Destination - Origin).Unit * UnitMultiplier
+       local Result = Raycast(Workspace, Origin, Direction)
+       if (Result) then
+           local Normal = Result.Normal
+           local Material = Result.Material
+           return Direction, Normal, Material
+       end
+   end
+   return nil
+end
+
+function Aorinject.Character(Player)
+   return Player.Character
+end
+
+function Aorinject.CheckHealth(Player)
+   local Character = Aorinject.Character(Player)
+   local Humanoid = FindFirstChildWhichIsA(Character, "Humanoid")
+   local Health = (Humanoid and Humanoid.Health or 0)
+   return Health > 0
+end
+
+function Aorinject.Check()
+   return (Aorinject.Enabled == true and Aorinject.Selected ~= LocalPlayer and Aorinject.SelectedPart ~= nil)
+end
+Aorinject.checkSilentAim = Aorinject.Check
+
+function Aorinject.GetClosestTargetPartToCursor(Character)
+   local TargetParts = Aorinject.TargetPart
+
+   local ClosestPart = nil
+   local ClosestPartPosition = nil
+   local ClosestPartOnScreen = false
+   local ClosestPartMagnitudeFromMouse = nil
+   local ShortestDistance = 1/0
+   local function CheckTargetPart(TargetPart)
+       if (typeof(TargetPart) == "string") then
+           TargetPart = FindFirstChild(Character, TargetPart)
+       end
+       if not (TargetPart) then
+           return
+       end
+       local PartPos, onScreen = WorldToViewportPoint(CurrentCamera, TargetPart.Position)
+       local GuiInset = GetGuiInset(GuiService)
+       local Magnitude = (Vector2new(PartPos.X, PartPos.Y - GuiInset.Y) - Vector2new(Mouse.X, Mouse.Y)).Magnitude
+       if (Magnitude < ShortestDistance) then
+           ClosestPart = TargetPart
+           ClosestPartPosition = PartPos
+           ClosestPartOnScreen = onScreen
+           ClosestPartMagnitudeFromMouse = Magnitude
+           ShortestDistance = Magnitude
+       end
+   end
+   if (typeof(TargetParts) == "string") then
+       if (TargetParts == "All") then
+           for _, v in ipairs(Character:GetChildren()) do
+               if not (v:IsA("BasePart")) then
+                   continue
+               end
+               CheckTargetPart(v)
+           end
+       else
+           CheckTargetPart(TargetParts)
+       end
+   end
+   if (typeof(TargetParts) == "table") then
+       for _, TargetPartName in ipairs(TargetParts) do
+           CheckTargetPart(TargetPartName)
+       end
+   end
+   return ClosestPart, ClosestPartPosition, ClosestPartOnScreen, ClosestPartMagnitudeFromMouse
+end
+
+function Aorinject.GetClosestPlayerToCursor()
+   local TargetPart = nil
+   local ClosestPlayer = nil
+   local ShortestDistance = 1/0
+   for _, Player in ipairs(GetPlayers(Players)) do
+       local Character = Aorinject.Character(Player)
+       if Character then
+           local TargetPartTemp, _, _, Magnitude = Aorinject.GetClosestTargetPartToCursor(Character)
+           if (TargetPartTemp and Aorinject.CheckHealth(Player)) then
+               if (circle.Radius > Magnitude and Magnitude < ShortestDistance) then
+                   if (Aorinject.VisibleCheck and not Aorinject.IsPartVisible(TargetPartTemp, Character)) then continue end
+                   ClosestPlayer = Player
+                   ShortestDistance = Magnitude
+                   TargetPart = TargetPartTemp
+               end
+           end
+       end
+   end
+   Aorinject.Selected = ClosestPlayer
+   Aorinject.SelectedPart = TargetPart
+end
+
+Heartbeat:Connect(function()
+   Aorinject.UpdateFOV()
+   Aorinject.GetClosestPlayerToCursor()
+   if Aorinject.Selected and Aorinject.Selected ~= game.Players.LocalPlayer and Aorinject.Selected.Character:WaitForChild("BodyEffects")["K.O"].Value == false and Aorinject.Selected.Character:FindFirstChild("GRABBING_CONSTRAINT") == false then
+       Aorinject.SelectedPart.Velocity = Vector3.new(Aorinject.SelectedPart.Velocity.X, 0, Aorinject.SelectedPart.Velocity.Z)
+       Aorinject.SelectedPart.AssemblyLinearVelocity = Vector3.new(Aorinject.SelectedPart.Velocity.X, 0, Aorinject.SelectedPart.Velocity.Z)
+   end
+end) 
+function Aorinject.Check()
+   if not (Aorinject.Enabled == true and Aorinject.Selected ~= LocalPlayer and Aorinject.SelectedPart ~= nil) then
+       return false
+   end
+   local Character = Aorinject.Character(Aorinject.Selected)
+   local KOd = Character:WaitForChild("BodyEffects")["K.O"].Value
+   local Grabbed = Character:FindFirstChild("GRABBING_CONSTRAINT") ~= nil
+   if getgenv().GrabbedCheck then
+       if Grabbed then
+           return false
+       end
+   end
+   if getgenv().KoCheck then
+       if KOd then
+           return false
+       end
+   end
+   return true
+end
+-- // custom  functions
+
+mouse.KeyDown:Connect(function(key)
+if key == getgenv().Settings["SilentAimKeybind"] then
+if AorinjectSettings.SilentAim == true then
+   getgenv().AorinjectSettings.SilentAim = true
+       game.StarterGui:SetCore("SendNotification", {
+           Title = "flash aha",
+           Text = "disabled",
+           Duration = 0.0001
+       })
+AorinjectSettings.SilentAim = false
+else
+AorinjectSettings.SilentAim = true
+       game.StarterGui:SetCore("SendNotification", {
+           Title = "flash aha",
+           Text = "enabled",
+           Duration = 0.0001
+       })
+end
+end
+end)
+
+           
+local __index
+__index = hookmetamethod(game, "__index", function(t, k)
+   if (t:IsA("Mouse") and (k == "Hit" or k == "Target") and Aorinject.Check()) then
+       local SelectedPart = Aorinject.SelectedPart
+       if (getgenv().AorinjectSettings.SilentAim and (k == "Hit" or k == "Target")) then
+           local Hit = SelectedPart.CFrame + (SelectedPart.Velocity * getgenv().AorinjectSettings.Prediction)
+           return (k == "Hit" and Hit or SelectedPart)
+       end
+   end
+   return __index(t, k)
+end)
